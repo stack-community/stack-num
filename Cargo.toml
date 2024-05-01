@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8"
-regex = "0.1"
 clap = "3.0"
 nalgebra = "0.32.5"
+regex = "1.10.4"
