@@ -131,7 +131,7 @@ impl Type {
                     } else {
                         matrix.push(buffer.clone());
                         buffer.clear();
-                        count = 0;
+                        count = 1;
                         buffer.push(*i);
                     }
                 }
@@ -143,11 +143,11 @@ impl Type {
                     for j in i.iter() {
                         text += &format!(" {j},")
                     }
-                    text.remove(text.len() -1);
+                    text.remove(text.len() - 1);
                     text += ";"
                 }
 
-                text.remove(text.len() -1);
+                text.remove(text.len() - 1);
                 text += "}";
                 text
             }
@@ -177,7 +177,7 @@ impl Type {
                     } else {
                         matrix.push(buffer.clone());
                         buffer.clear();
-                        count = 0;
+                        count = 1;
                         buffer.push(*i);
                     }
                 }
@@ -189,11 +189,11 @@ impl Type {
                     for j in i.iter() {
                         text += &format!(" {j},")
                     }
-                    text.remove(text.len() -1);
+                    text.remove(text.len() - 1);
                     text += ";"
                 }
 
-                text.remove(text.len() -1);
+                text.remove(text.len() - 1);
                 text += "}";
                 text
             }
@@ -335,7 +335,7 @@ impl Executor {
                     brackets -= 1;
                     buffer.push(')');
                 }
-                '{' if !hash && brackets == 0 &&  !escape => {
+                '{' if !hash && brackets == 0 && !escape => {
                     braces += 1;
                     buffer.push('{');
                 }
@@ -500,7 +500,10 @@ impl Executor {
 
                 let value = text
                     .split(|c| c == ',' || c == ';')
-                    .map(|x| x.trim().parse::<f64>().unwrap_or_default())
+                    .map(|x| {
+                        self.evaluate_program(x.to_string());
+                        self.pop_stack().get_number()
+                    })
                     .collect::<Vec<f64>>();
                 self.stack.push(Type::Matrix(value, (row, col)))
             } else if token.starts_with("error:") {
