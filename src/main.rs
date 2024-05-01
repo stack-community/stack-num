@@ -1,11 +1,11 @@
-use nalgebra;
 use clap::{App, Arg};
+use nalgebra;
 use rand::seq::SliceRandom;
 use regex::Regex;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
-use std::io::{self, Read, Error, Write};
+use std::io::{self, Error, Read, Write};
 use std::path::Path;
 use std::thread::{self, sleep};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -24,8 +24,7 @@ fn main() {
             .short('d')
             .long("debug")
             .help("Enables debug mode"));
-    let matches = app.clone()
-        .get_matches();
+    let matches = app.clone().get_matches();
 
     if let Some(script) = matches.value_of("script") {
         if matches.is_present("debug") {
@@ -50,7 +49,7 @@ fn main() {
     } else {
         // Show a title
         println!("NumStack Programming Language");
-        println!("Version {}",  {app.get_version().unwrap_or("unknown")});
+        println!("Version {}", { app.get_version().unwrap_or("unknown") });
         let mut executor = Executor::new(Mode::Debug);
         // REPL Execution
         loop {
@@ -99,6 +98,7 @@ enum Type {
     String(String),
     Bool(bool),
     List(Vec<Type>),
+    Matrix(Vec<f64>, (usize, usize)),
     Object(String, HashMap<String, Type>),
     Error(String),
 }
@@ -119,6 +119,38 @@ impl Type {
             Type::Object(name, _) => {
                 format!("Object<{name}>")
             }
+            Type::Matrix(mx, (_, length)) => {
+                let mut matrix = Vec::new();
+                let mut buffer = Vec::new();
+
+                let mut count = 0;
+                for i in mx {
+                    if count < *length {
+                        buffer.push(*i);
+                        count += 1;
+                    } else {
+                        matrix.push(buffer.clone());
+                        buffer.clear();
+                        count = 0;
+                        buffer.push(*i);
+                    }
+                }
+                matrix.push(buffer.clone());
+
+                let mut text = "{".to_string();
+
+                for i in matrix.iter() {
+                    for j in i.iter() {
+                        text += &format!(" {j},")
+                    }
+                    text.remove(text.len() -1);
+                    text += ";"
+                }
+
+                text.remove(text.len() -1);
+                text += "}";
+                text
+            }
         }
     }
 
@@ -132,6 +164,38 @@ impl Type {
             Type::Error(err) => format!("error:{err}"),
             Type::Object(name, _) => {
                 format!("Object<{name}>")
+            }
+            Type::Matrix(mx, (_, length)) => {
+                let mut matrix = Vec::new();
+                let mut buffer = Vec::new();
+
+                let mut count = 0;
+                for i in mx {
+                    if count < *length {
+                        buffer.push(*i);
+                        count += 1;
+                    } else {
+                        matrix.push(buffer.clone());
+                        buffer.clear();
+                        count = 0;
+                        buffer.push(*i);
+                    }
+                }
+                matrix.push(buffer.clone());
+
+                let mut text = "{".to_string();
+
+                for i in matrix.iter() {
+                    for j in i.iter() {
+                        text += &format!(" {j},")
+                    }
+                    text.remove(text.len() -1);
+                    text += ";"
+                }
+
+                text.remove(text.len() -1);
+                text += "}";
+                text
             }
         }
     }
@@ -151,6 +215,7 @@ impl Type {
             Type::List(l) => l.len() as f64,
             Type::Error(e) => e.parse().unwrap_or(0f64),
             Type::Object(_, object) => object.len() as f64,
+            _ => 0f64,
         }
     }
 
@@ -163,6 +228,7 @@ impl Type {
             Type::List(l) => !l.is_empty(),
             Type::Error(e) => e.parse().unwrap_or(false),
             Type::Object(_, object) => object.is_empty(),
+            _ => false,
         }
     }
 
@@ -179,6 +245,14 @@ impl Type {
             Type::List(l) => l.to_vec(),
             Type::Error(e) => vec![Type::Error(e.to_string())],
             Type::Object(_, object) => object.values().map(|x| x.to_owned()).collect::<Vec<Type>>(),
+            _ => vec![],
+        }
+    }
+
+    fn get_matrix(&mut self) -> (Vec<f64>, (usize, usize)) {
+        match self {
+            Type::Matrix(mx, size) => (mx.to_vec(), *size),
+            _ => (vec![], (0, 0)),
         }
     }
 }
@@ -244,6 +318,7 @@ impl Executor {
         let mut buffer = String::new(); // Temporary storage
         let mut brackets = 0; // String's nest structure
         let mut parentheses = 0; // List's nest structure
+        let mut braces = 0; // Matrix's nest structure
         let mut hash = false; // Is it Comment
         let mut escape = false; // Flag to indicate next character is escaped
 
@@ -259,6 +334,14 @@ impl Executor {
                 ')' if !hash && !escape => {
                     brackets -= 1;
                     buffer.push(')');
+                }
+                '{' if !hash && brackets == 0 &&  !escape => {
+                    braces += 1;
+                    buffer.push('{');
+                }
+                '}' if !hash && brackets == 0 && !escape => {
+                    braces -= 1;
+                    buffer.push('}');
                 }
                 '#' if !hash && !escape => {
                     hash = true;
@@ -276,7 +359,7 @@ impl Executor {
                     parentheses -= 1;
                     buffer.push(']');
                 }
-                ' ' if !hash && parentheses == 0 && brackets == 0 && !escape => {
+                ' ' if !hash && parentheses == 0 && brackets == 0 && !escape && braces == 0 => {
                     if !buffer.is_empty() {
                         syntax.push(buffer.clone());
                         buffer.clear();
@@ -406,6 +489,20 @@ impl Executor {
                 }
                 list.reverse(); // reverse list
                 self.stack.push(Type::List(list));
+            } else if chars[0] == '{' && chars[chars.len() - 1] == '}' {
+                let text = token[1..token.len() - 1].to_string();
+
+                let row = text.split(";").collect::<Vec<&str>>().len();
+                let col = text.split(";").collect::<Vec<&str>>()[0]
+                    .split(",")
+                    .collect::<Vec<&str>>()
+                    .len();
+
+                let value = text
+                    .split(|c| c == ',' || c == ';')
+                    .map(|x| x.trim().parse::<f64>().unwrap_or_default())
+                    .collect::<Vec<f64>>();
+                self.stack.push(Type::Matrix(value, (row, col)))
             } else if token.starts_with("error:") {
                 // Push error value on the stack
                 self.stack.push(Type::Error(token.replace("error:", "")))
@@ -1031,6 +1128,7 @@ impl Executor {
                     Type::Bool(_) => "bool".to_string(),
                     Type::List(_) => "list".to_string(),
                     Type::Error(_) => "error".to_string(),
+                    Type::Matrix(_, _) => "matrix".to_string(),
                     Type::Object(name, _) => name.to_string(),
                 };
 
@@ -1206,7 +1304,19 @@ impl Executor {
             },
 
             // Commands of science technology mathematics calculations
-            // But, It's not implemented yet. Please contribute here...
+            "scalar-mul" => {
+                let number = self.pop_stack().get_number();
+
+                let (matrix, (rows, cols)) = self.pop_stack().get_matrix();
+
+                let matrix = nalgebra::DMatrix::from_row_slice(rows, cols, &matrix);
+                let result: Vec<f64> = (matrix * number).iter().cloned().collect();
+
+                self.stack.push(Type::Matrix(
+                    result.iter().map(|x| *x).collect(),
+                    (rows, cols),
+                ))
+            }
 
             // If it is not recognized as a command, use it as a string.
             _ => self.stack.push(Type::String(command)),
