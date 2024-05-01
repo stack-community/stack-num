@@ -1306,7 +1306,7 @@ impl Executor {
                 _ => self.stack.push(Type::Error("not-object".to_string())),
             },
 
-            // Commands of science technology mathematics calculations
+            // Commands of matrix
             "scalar-mul" => {
                 let number = self.pop_stack().get_number();
 
@@ -1318,6 +1318,51 @@ impl Executor {
                 self.stack.push(Type::Matrix(
                     result.iter().map(|x| *x).collect(),
                     (rows, cols),
+                ))
+            }
+
+            "add-matrix" => {
+                let (matrix1, (rows1, cols1)) = self.pop_stack().get_matrix();
+                let matrix1 = nalgebra::DMatrix::from_row_slice(rows1, cols1, &matrix1);
+
+                let (matrix2, (rows2, cols2)) = self.pop_stack().get_matrix();
+                let matrix2 = nalgebra::DMatrix::from_row_slice(rows2, cols2, &matrix2);
+
+                let result: Vec<f64> = (matrix1 + matrix2).iter().cloned().collect();
+
+                self.stack.push(Type::Matrix(
+                    result.iter().map(|x| *x).collect(),
+                    (rows1, cols1),
+                ))
+            }
+
+            "sub-matrix" => {
+                let (matrix1, (rows1, cols1)) = self.pop_stack().get_matrix();
+                let matrix1 = nalgebra::DMatrix::from_row_slice(rows1, cols1, &matrix1);
+
+                let (matrix2, (rows2, cols2)) = self.pop_stack().get_matrix();
+                let matrix2 = nalgebra::DMatrix::from_row_slice(rows2, cols2, &matrix2);
+
+                let result: Vec<f64> = (matrix2 - matrix1).iter().cloned().collect();
+
+                self.stack.push(Type::Matrix(
+                    result.iter().map(|x| *x).collect(),
+                    (rows1, cols1),
+                ))
+            }
+
+            "mul-matrix" => {
+                let (matrix1, (rows1, cols1)) = self.pop_stack().get_matrix();
+                let matrix1 = nalgebra::DMatrix::from_row_slice(rows1, cols1, &matrix1);
+
+                let (matrix2, (rows2, cols2)) = self.pop_stack().get_matrix();
+                let matrix2 = nalgebra::DMatrix::from_row_slice(rows2, cols2, &matrix2);
+
+                let result: Vec<f64> = (matrix1 * matrix2).iter().cloned().collect();
+
+                self.stack.push(Type::Matrix(
+                    result.iter().map(|x| *x).collect(),
+                    (rows1, cols1),
                 ))
             }
 
