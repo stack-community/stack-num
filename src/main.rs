@@ -1368,6 +1368,24 @@ impl Executor {
                 ))
             }
 
+            "transpose" => {
+                let (matrix, (rows, cols)) = self.pop_stack().get_matrix();
+                let matrix = nalgebra::DMatrix::from_row_slice(rows, cols, &matrix);
+                let transposed_matrix = matrix.transpose();
+
+                let mut transposed_data = Vec::new();
+                for i in 0..transposed_matrix.nrows() {
+                    for j in 0..transposed_matrix.ncols() {
+                        transposed_data.push(transposed_matrix[(i, j)]);
+                    }
+                }
+
+                self.stack.push(Type::Matrix(
+                    transposed_data,
+                    (cols, rows),
+                ))
+            }
+
             "graph" => {
                 let (data, (row, col)) = self.pop_stack().get_matrix();
                 let adjacency_matrix = nalgebra::DMatrix::<f64>::from_row_slice(row, col, &data);
