@@ -1,5 +1,7 @@
 use clap::{App, Arg};
 use nalgebra;
+use petgraph::dot::{Config, Dot};
+use petgraph::Graph;
 use rand::seq::SliceRandom;
 use regex::Regex;
 use std::collections::HashMap;
@@ -1364,6 +1366,28 @@ impl Executor {
                     result.iter().map(|x| *x).collect(),
                     (rows1, cols1),
                 ))
+            }
+
+            "graph" => {
+                let (data, (row, col)) = self.pop_stack().get_matrix();
+                let adjacency_matrix = nalgebra::DMatrix::<f64>::from_row_slice(row, col, &data);
+
+                let mut graph = Graph::<f64, ()>::new();
+                let mut node_indices = Vec::new();
+
+                for &value in &data {
+                    let node_index = graph.add_node(value); // ノードのラベルに値を設定
+                    node_indices.push(node_index);
+                }
+                for (i, row) in adjacency_matrix.row_iter().enumerate() {
+                    for (j, &value) in row.iter().enumerate() {
+                        if value != 0.0 {
+                            graph.add_edge(node_indices[i], node_indices[j], ());
+                        }
+                    }
+                }
+                let dot = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
+                self.stack.push(Type::String(dot))
             }
 
             // If it is not recognized as a command, use it as a string.
