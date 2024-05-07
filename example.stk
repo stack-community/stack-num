@@ -1,0 +1,16 @@
+# 連立方程式を解く #
+
+{
+    3, 2;
+    4, -1
+} 
+(coefficients) var
+
+[13 5]
+(constants) var
+
+constants coefficients sim-equation 
+(solution) var
+
+(x = ) print solution 0 get println
+(y = ) print solution 1 get println

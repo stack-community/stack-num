@@ -247,7 +247,7 @@ impl Type {
             Type::List(l) => l.to_vec(),
             Type::Error(e) => vec![Type::Error(e.to_string())],
             Type::Object(_, object) => object.values().map(|x| x.to_owned()).collect::<Vec<Type>>(),
-            _ => vec![],
+            Type::Matrix(l, _) => l.to_owned().iter().map(|x|Type::Number(*x)).collect()
         }
     }
 
@@ -1380,10 +1380,32 @@ impl Executor {
                     }
                 }
 
+                self.stack.push(Type::Matrix(transposed_data, (cols, rows)))
+            }
+
+            "sim-equation" => {
+                let (matrix, (rows, cols)) = self.pop_stack().get_matrix();
+                let coefficients = nalgebra::DMatrix::from_row_slice(rows, cols, &matrix);
+                let constants = nalgebra::DVector::from_row_slice(
+                    self.pop_stack()
+                        .get_list()
+                        .iter()
+                        .map(|x| x.to_owned().get_number())
+                        .collect::<Vec<f64>>()
+                        .as_slice(),
+                );
+
+                let solution = if let Some(i) = coefficients.lu().solve(&constants) {
+                    i
+                } else {
+                    self.stack.push(Type::Error("no-solution".to_string()));
+                    return;
+                };
+    
                 self.stack.push(Type::Matrix(
-                    transposed_data,
-                    (cols, rows),
-                ))
+                    solution.as_slice().to_vec(),
+                    (solution.nrows(), solution.ncols()),
+                ));
             }
 
             "graph" => {
@@ -1394,7 +1416,7 @@ impl Executor {
                 let mut node_indices = Vec::new();
 
                 for &value in &data {
-                    let node_index = graph.add_node(value); // ノードのラベルに値を設定
+                    let node_index = graph.add_node(value);
                     node_indices.push(node_index);
                 }
                 for (i, row) in adjacency_matrix.row_iter().enumerate() {
