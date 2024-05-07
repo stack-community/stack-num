@@ -1,5 +1,4 @@
 use clap::{App, Arg};
-use nalgebra;
 use petgraph::dot::{Config, Dot};
 use petgraph::Graph;
 use rand::seq::SliceRandom;
@@ -247,7 +246,7 @@ impl Type {
             Type::List(l) => l.to_vec(),
             Type::Error(e) => vec![Type::Error(e.to_string())],
             Type::Object(_, object) => object.values().map(|x| x.to_owned()).collect::<Vec<Type>>(),
-            Type::Matrix(l, _) => l.to_owned().iter().map(|x|Type::Number(*x)).collect()
+            Type::Matrix(l, _) => l.to_owned().iter().map(|x| Type::Number(*x)).collect(),
         }
     }
 
@@ -1385,15 +1384,37 @@ impl Executor {
 
             "sim-equation" => {
                 let (matrix, (rows, cols)) = self.pop_stack().get_matrix();
-                let coefficients = nalgebra::DMatrix::from_row_slice(rows, cols, &matrix);
-                let constants = nalgebra::DVector::from_row_slice(
-                    self.pop_stack()
-                        .get_list()
+                let constants = {
+                    let temp_constants = self.pop_stack().get_list();
+                    let constants: Vec<f64> = temp_constants
                         .iter()
                         .map(|x| x.to_owned().get_number())
-                        .collect::<Vec<f64>>()
-                        .as_slice(),
-                );
+                        .collect();
+                    constants
+                };
+
+                // Rounding error
+                let decimal_places = {
+                    let array = [matrix.clone(), constants.to_vec()].concat();
+                    let mut temp: usize = 0;
+                    for i in array {
+                        let i = i
+                            .to_string()
+                            .split(".")
+                            .collect::<Vec<&str>>()
+                            .get(1)
+                            .unwrap_or(&"")
+                            .chars()
+                            .count();
+                        if temp < i {
+                            temp = i
+                        }
+                    }
+                    temp
+                };
+
+                let coefficients = nalgebra::DMatrix::from_row_slice(rows, cols, &matrix);
+                let constants = nalgebra::DVector::from_row_slice(&constants);
 
                 let solution = if let Some(i) = coefficients.lu().solve(&constants) {
                     i
@@ -1401,9 +1422,16 @@ impl Executor {
                     self.stack.push(Type::Error("no-solution".to_string()));
                     return;
                 };
-    
+
                 self.stack.push(Type::Matrix(
-                    solution.as_slice().to_vec(),
+                    solution
+                        .as_slice()
+                        .iter()
+                        .map(|value| {
+                            let factor = 10_f64.powi(decimal_places as i32);
+                            (value * factor).round() / factor
+                        })
+                        .collect(),
                     (solution.nrows(), solution.ncols()),
                 ));
             }
