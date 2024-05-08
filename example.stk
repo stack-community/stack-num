@@ -1,21 +1,24 @@
 #
     この連立方程式を解く 
     
-    5x + 3y = 7
-    3x - 5y = -23
+    2x + 3y - z  = 10
+     x - 2y + 3z = -5
+    3x +  y + 2z = 15​
 #
 
 {
-    5, 3;
-    3, -5
+    2,  3, 1;
+    1, -2, 3;
+    3,  1, -2
 } 
 (coefficients) var
 
-[7 -23]
+[10 -5 15]
 (constants) var
 
 constants coefficients sim-equation 
 (solution) var
 
-(x = ) print solution 0 get println
-(y = ) print solution 1 get println
+(x = ) solution 0 get concat println
+(y = ) solution 1 get concat println
+(z = ) solution 2 get concat println

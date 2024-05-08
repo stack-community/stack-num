@@ -85,6 +85,71 @@ fn input(prompt: &str) -> String {
     result.trim().to_string()
 }
 
+#[derive(Debug, Clone)]
+struct Fraction {
+    numerator: i32,
+    denominator: i32,
+}
+
+impl Fraction {
+    fn new(value: f64) -> Self {
+        let mut frac = Fraction {
+            numerator: value as i32,
+            denominator: 1,
+        };
+
+        let precision = 0.0001;
+        while (frac.to_f64() - value).abs() > precision {
+            frac.denominator *= 10;
+            frac.numerator = (value * frac.denominator as f64) as i32;
+        }
+
+        frac.simplify();
+        frac
+    }
+
+    fn from(value: String) -> Fraction {
+        let value = value.split("/").collect::<Vec<&str>>();
+        let mut fraction = Fraction {
+            numerator: value.get(0).unwrap_or(&"0").parse::<i32>().unwrap_or(1),
+            denominator: value.get(1).unwrap_or(&"1").parse::<i32>().unwrap_or(1),
+        };
+        fraction.simplify();
+        fraction
+    }
+
+    fn display(&mut self) -> String {
+        self.simplify();
+        if self.denominator == 1 {
+            self.numerator.to_string()
+        } else {
+            format!("{}/{}", self.numerator, self.denominator)
+        }
+    }
+
+    // Function to simplify the fraction
+    fn simplify(&mut self) {
+        // Function to find the greatest common divisor (GCD) using Euclid's algorithm
+        fn gcd(mut a: i32, mut b: i32) -> i32 {
+            while b != 0 {
+                let temp = b;
+                b = a % b;
+                a = temp;
+            }
+            a
+        }
+
+        let gcd = gcd(self.numerator.abs(), self.denominator.abs());
+        self.numerator /= gcd;
+        self.denominator /= gcd;
+    }
+
+    // Function to convert the fraction to a floating-point number
+    fn to_f64(&self) -> f64 {
+        self.numerator as f64 / self.denominator as f64
+    }
+}
+
 /// Execution Mode
 #[derive(Clone, Debug)]
 enum Mode {
@@ -95,7 +160,7 @@ enum Mode {
 /// Data type
 #[derive(Clone, Debug)]
 enum Type {
-    Number(f64),
+    Number(Fraction),
     String(String),
     Bool(bool),
     List(Vec<Type>),
@@ -109,7 +174,7 @@ impl Type {
     /// Show data to display
     fn display(&self) -> String {
         match self {
-            Type::Number(num) => num.to_string(),
+            Type::Number(num) => num.clone().display(),
             Type::String(s) => format!("({})", s),
             Type::Bool(b) => b.to_string(),
             Type::List(list) => {
@@ -142,14 +207,14 @@ impl Type {
 
                 for i in matrix.iter() {
                     for j in i.iter() {
-                        text += &format!(" {j},")
+                        text += &format!(" {},", Fraction::new(*j).display())
                     }
                     text.remove(text.len() - 1);
                     text += ";"
                 }
 
                 text.remove(text.len() - 1);
-                text += "}";
+                text += " }";
                 text
             }
         }
@@ -159,7 +224,7 @@ impl Type {
     fn get_string(&mut self) -> String {
         match self {
             Type::String(s) => s.to_string(),
-            Type::Number(i) => i.to_string(),
+            Type::Number(i) => i.display(),
             Type::Bool(b) => b.to_string(),
             Type::List(l) => Type::List(l.to_owned()).display(),
             Type::Error(err) => format!("error:{err}"),
@@ -188,7 +253,7 @@ impl Type {
 
                 for i in matrix.iter() {
                     for j in i.iter() {
-                        text += &format!(" {j},")
+                        text += &format!(" {},", Fraction::new(*j).display())
                     }
                     text.remove(text.len() - 1);
                     text += ";"
@@ -202,21 +267,21 @@ impl Type {
     }
 
     /// Get number from data
-    fn get_number(&mut self) -> f64 {
+    fn get_number(&mut self) -> Fraction {
         match self {
-            Type::String(s) => s.parse().unwrap_or(0.0),
-            Type::Number(i) => *i,
+            Type::String(s) => Fraction::from(s.to_owned()),
+            Type::Number(i) => i.clone(),
             Type::Bool(b) => {
                 if *b {
-                    1.0
+                    Fraction::new(1.0)
                 } else {
-                    0.0
+                    Fraction::new(0.0)
                 }
             }
-            Type::List(l) => l.len() as f64,
-            Type::Error(e) => e.parse().unwrap_or(0f64),
-            Type::Object(_, object) => object.len() as f64,
-            _ => 0f64,
+            Type::List(l) => Fraction::new(l.len() as f64),
+            Type::Error(e) => Fraction::new(e.parse().unwrap_or(0f64)),
+            Type::Object(_, object) => Fraction::new(object.len() as f64),
+            _ =>  Fraction::new(0f64),
         }
     }
 
@@ -224,7 +289,7 @@ impl Type {
     fn get_bool(&mut self) -> bool {
         match self {
             Type::String(s) => !s.is_empty(),
-            Type::Number(i) => *i != 0.0,
+            Type::Number(i) => i.to_f64() != 0.0,
             Type::Bool(b) => *b,
             Type::List(l) => !l.is_empty(),
             Type::Error(e) => e.parse().unwrap_or(false),
@@ -241,12 +306,12 @@ impl Type {
                 .chars()
                 .map(|x| Type::String(x.to_string()))
                 .collect::<Vec<Type>>(),
-            Type::Number(i) => vec![Type::Number(*i)],
+            Type::Number(i) => vec![Type::Number(i.to_owned())],
             Type::Bool(b) => vec![Type::Bool(*b)],
             Type::List(l) => l.to_vec(),
             Type::Error(e) => vec![Type::Error(e.to_string())],
             Type::Object(_, object) => object.values().map(|x| x.to_owned()).collect::<Vec<Type>>(),
-            Type::Matrix(l, _) => l.to_owned().iter().map(|x| Type::Number(*x)).collect(),
+            Type::Matrix(l, _) => l.to_owned().iter().map(|x| Type::Number(Fraction::new(*x))).collect(),
         }
     }
 
@@ -411,7 +476,7 @@ impl Executor {
             // Judge what the token is
             if let Ok(i) = token.parse::<f64>() {
                 // Push number value on the stack
-                self.stack.push(Type::Number(i));
+                self.stack.push(Type::Number(Fraction::new(i)));
             } else if token == "true" || token == "false" {
                 // Push bool value on the stack
                 self.stack.push(Type::Bool(token.parse().unwrap_or(true)));
@@ -503,7 +568,7 @@ impl Executor {
                     .split(|c| c == ',' || c == ';')
                     .map(|x| {
                         self.evaluate_program(x.to_string());
-                        self.pop_stack().get_number()
+                        self.pop_stack().get_number().to_f64()
                     })
                     .collect::<Vec<f64>>();
                 self.stack.push(Type::Matrix(value, (row, col)))
@@ -516,6 +581,9 @@ impl Executor {
             } else if chars[0] == '#' && chars[chars.len() - 1] == '#' {
                 // Processing comments
                 self.log_print(format!("* Comment \"{}\"\n", token.replace('#', "")));
+            } else if token.contains("/"){
+                // Push fraction number from literal
+                self.stack.push(Type::Number(Fraction::from(token)))
             } else {
                 // Else, execute as command
                 self.execute_command(token);
@@ -534,68 +602,68 @@ impl Executor {
 
             // Addition
             "add" => {
-                let b = self.pop_stack().get_number();
-                let a = self.pop_stack().get_number();
-                self.stack.push(Type::Number(a + b));
+                let b = self.pop_stack().get_number().to_f64();
+                let a = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(a + b)));
             }
 
             // Subtraction
             "sub" => {
-                let b = self.pop_stack().get_number();
-                let a = self.pop_stack().get_number();
-                self.stack.push(Type::Number(a - b));
+                let b = self.pop_stack().get_number().to_f64();
+                let a = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(a - b)));
             }
 
             // Multiplication
             "mul" => {
-                let b = self.pop_stack().get_number();
-                let a = self.pop_stack().get_number();
-                self.stack.push(Type::Number(a * b));
+                let b = self.pop_stack().get_number().to_f64();
+                let a = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(a * b)));
             }
 
             // Division
             "div" => {
-                let b = self.pop_stack().get_number();
-                let a = self.pop_stack().get_number();
-                self.stack.push(Type::Number(a / b));
+                let b = self.pop_stack().get_number().to_f64();
+                let a = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(a / b)));
             }
 
             // Remainder of division
             "mod" => {
-                let b = self.pop_stack().get_number();
-                let a = self.pop_stack().get_number();
-                self.stack.push(Type::Number(a % b));
+                let b = self.pop_stack().get_number().to_f64();
+                let a = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(a % b)));
             }
 
             // Exponentiation
             "pow" => {
-                let b = self.pop_stack().get_number();
-                let a = self.pop_stack().get_number();
-                self.stack.push(Type::Number(a.powf(b)));
+                let b = self.pop_stack().get_number().to_f64();
+                let a = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(a.powf(b))));
             }
 
             // Rounding off
             "round" => {
-                let a = self.pop_stack().get_number();
-                self.stack.push(Type::Number(a.round()));
+                let a = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(a.round())));
             }
 
             // Trigonometric sine
             "sin" => {
-                let number = self.pop_stack().get_number();
-                self.stack.push(Type::Number(number.sin()))
+                let number = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(number.sin())))
             }
 
             // Trigonometric cosine
             "cos" => {
-                let number = self.pop_stack().get_number();
-                self.stack.push(Type::Number(number.cos()))
+                let number = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(number.cos())))
             }
 
             // Trigonometric tangent
             "tan" => {
-                let number = self.pop_stack().get_number();
-                self.stack.push(Type::Number(number.tan()))
+                let number = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(number.tan())))
             }
 
             // Logical operations of AND
@@ -627,8 +695,8 @@ impl Executor {
 
             // Judge is it less
             "less" => {
-                let b = self.pop_stack().get_number();
-                let a = self.pop_stack().get_number();
+                let b = self.pop_stack().get_number().to_f64();
+                let a = self.pop_stack().get_number().to_f64();
                 self.stack.push(Type::Bool(a < b));
             }
 
@@ -653,14 +721,14 @@ impl Executor {
 
             // Repeat string a number of times
             "repeat" => {
-                let count = self.pop_stack().get_number(); // Count
+                let count = self.pop_stack().get_number().to_f64(); // Count
                 let text = self.pop_stack().get_string(); // String
                 self.stack.push(Type::String(text.repeat(count as usize)));
             }
 
             // Get unicode character form number
             "decode" => {
-                let code = self.pop_stack().get_number();
+                let code = self.pop_stack().get_number().to_f64();
                 let result = char::from_u32(code as u32);
                 match result {
                     Some(c) => self.stack.push(Type::String(c.to_string())),
@@ -675,7 +743,7 @@ impl Executor {
             "encode" => {
                 let string = self.pop_stack().get_string();
                 if let Some(first_char) = string.chars().next() {
-                    self.stack.push(Type::Number((first_char as u32) as f64));
+                    self.stack.push(Type::Number(Fraction::new((first_char as u32) as f64)));
                 } else {
                     self.log_print("Error! failed of string encoding\n".to_string());
                     self.stack.push(Type::Error("string-encoding".to_string()));
@@ -876,7 +944,7 @@ impl Executor {
 
             // Exit a process
             "exit" => {
-                let status = self.pop_stack().get_number();
+                let status = self.pop_stack().get_number().to_f64();
                 std::process::exit(status as i32);
             }
 
@@ -884,7 +952,7 @@ impl Executor {
 
             // Get list value by index
             "get" => {
-                let index = self.pop_stack().get_number() as usize;
+                let index = self.pop_stack().get_number().to_f64() as usize;
                 let list: Vec<Type> = self.pop_stack().get_list();
                 if list.len() > index {
                     self.stack.push(list[index].clone());
@@ -897,7 +965,7 @@ impl Executor {
             // Set list value by index
             "set" => {
                 let value = self.pop_stack();
-                let index = self.pop_stack().get_number() as usize;
+                let index = self.pop_stack().get_number().to_f64() as usize;
                 let mut list: Vec<Type> = self.pop_stack().get_list();
                 if list.len() > index {
                     list[index] = value;
@@ -910,7 +978,7 @@ impl Executor {
 
             // Delete list value by index
             "del" => {
-                let index = self.pop_stack().get_number() as usize;
+                let index = self.pop_stack().get_number().to_f64() as usize;
                 let mut list = self.pop_stack().get_list();
                 if list.len() > index {
                     list.remove(index);
@@ -932,7 +1000,7 @@ impl Executor {
             // Insert value in the list
             "insert" => {
                 let data = self.pop_stack();
-                let index = self.pop_stack().get_number();
+                let index = self.pop_stack().get_number().to_f64();
                 let mut list = self.pop_stack().get_list();
                 list.insert(index as usize, data);
                 self.stack.push(Type::List(list));
@@ -945,7 +1013,7 @@ impl Executor {
 
                 for (index, item) in list.iter().enumerate() {
                     if target == item.clone().get_string() {
-                        self.stack.push(Type::Number(index as f64));
+                        self.stack.push(Type::Number(Fraction::new(index as f64)));
                         return;
                     }
                 }
@@ -993,14 +1061,14 @@ impl Executor {
 
             // Generate a range
             "range" => {
-                let step = self.pop_stack().get_number();
-                let max = self.pop_stack().get_number();
-                let min = self.pop_stack().get_number();
+                let step = self.pop_stack().get_number().to_f64();
+                let max = self.pop_stack().get_number().to_f64();
+                let min = self.pop_stack().get_number().to_f64();
 
                 let mut range: Vec<Type> = Vec::new();
 
                 for i in (min as usize..max as usize).step_by(step as usize) {
-                    range.push(Type::Number(i as f64));
+                    range.push(Type::Number(Fraction::new(i as f64)));
                 }
 
                 self.stack.push(Type::List(range));
@@ -1009,7 +1077,7 @@ impl Executor {
             // Get length of list
             "len" => {
                 let data = self.pop_stack().get_list();
-                self.stack.push(Type::Number(data.len() as f64));
+                self.stack.push(Type::Number(Fraction::new(data.len() as f64)));
             }
 
             // Commands of functional programming
@@ -1105,7 +1173,7 @@ impl Executor {
             // Get size of stack
             "size-stack" => {
                 let len: f64 = self.stack.len() as f64;
-                self.stack.push(Type::Number(len));
+                self.stack.push(Type::Number(Fraction::new(len)));
             }
 
             // Get Stack as List
@@ -1188,16 +1256,16 @@ impl Executor {
 
             // Get now time as unix epoch
             "now-time" => {
-                self.stack.push(Type::Number(
+                self.stack.push(Type::Number(Fraction::new(
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
                         .as_secs_f64(),
-                ));
+                )));
             }
 
             // Sleep fixed time
-            "sleep" => sleep(Duration::from_secs_f64(self.pop_stack().get_number())),
+            "sleep" => sleep(Duration::from_secs_f64(self.pop_stack().get_number().to_f64())),
 
             // Commands of object oriented system
 
@@ -1309,7 +1377,7 @@ impl Executor {
 
             // Commands of matrix
             "scalar-mul" => {
-                let number = self.pop_stack().get_number();
+                let number = self.pop_stack().get_number().to_f64();
 
                 let (matrix, (rows, cols)) = self.pop_stack().get_matrix();
 
@@ -1388,7 +1456,7 @@ impl Executor {
                     let temp_constants = self.pop_stack().get_list();
                     let constants: Vec<f64> = temp_constants
                         .iter()
-                        .map(|x| x.to_owned().get_number())
+                        .map(|x| x.to_owned().get_number().to_f64())
                         .collect();
                     constants
                 };
