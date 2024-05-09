@@ -171,6 +171,39 @@ enum Type {
 
 /// Implement methods
 impl Type {
+    fn to_matrix(mx: &Vec<Fraction>, length: usize) -> String {
+        let mut matrix: Vec<Vec<Fraction>> = Vec::new();
+        let mut buffer: Vec<Fraction> = Vec::new();
+        
+        let mut count = 0;
+        for i in mx {
+            if count < length {
+                buffer.push(i.clone());
+                count += 1;
+            } else {
+                matrix.push(buffer.clone());
+                buffer.clear();
+                count = 1;
+                buffer.push(i.clone());
+            }
+        }
+        matrix.push(buffer.clone());
+        
+        let mut text = "{".to_string();
+        
+        for i in matrix.iter() {
+            for j in i.iter() {
+                text += &format!(" {},", j.clone().display())
+            }
+            text.remove(text.len() - 1);
+            text += ";"
+        }
+        
+        text.remove(text.len() - 1);
+        text += " }";
+        text
+    }
+    
     /// Show data to display
     fn display(&self) -> String {
         match self {
@@ -182,41 +215,8 @@ impl Type {
                 format!("[{}]", result.join(" "))
             }
             Type::Error(err) => format!("error:{err}"),
-            Type::Object(name, _) => {
-                format!("Object<{name}>")
-            }
-            Type::Matrix(mx, (_, length)) => {
-                let mut matrix: Vec<Vec<Fraction>> = Vec::new();
-                let mut buffer: Vec<Fraction> = Vec::new();
-
-                let mut count = 0;
-                for i in mx {
-                    if count < *length {
-                        buffer.push(i.clone());
-                        count += 1;
-                    } else {
-                        matrix.push(buffer.clone());
-                        buffer.clear();
-                        count = 1;
-                        buffer.push(i.clone());
-                    }
-                }
-                matrix.push(buffer.clone());
-
-                let mut text = "{".to_string();
-
-                for i in matrix.iter() {
-                    for j in i.iter() {
-                        text += &format!(" {},", j.clone().display())
-                    }
-                    text.remove(text.len() - 1);
-                    text += ";"
-                }
-
-                text.remove(text.len() - 1);
-                text += " }";
-                text
-            }
+            Type::Object(name, _) => format!("Object<{name}>"),  
+            Type::Matrix(mx, (_, length)) => Type::to_matrix(mx, *length),
         }
     }
 
@@ -228,41 +228,8 @@ impl Type {
             Type::Bool(b) => b.to_string(),
             Type::List(l) => Type::List(l.to_owned()).display(),
             Type::Error(err) => format!("error:{err}"),
-            Type::Object(name, _) => {
-                format!("Object<{name}>")
-            }
-            Type::Matrix(mx, (_, length)) => {
-                let mut matrix = Vec::new();
-                let mut buffer = Vec::new();
-
-                let mut count = 0;
-                for i in mx {
-                    if count < *length {
-                        buffer.push(i.clone());
-                        count += 1;
-                    } else {
-                        matrix.push(buffer.clone());
-                        buffer.clear();
-                        count = 1;
-                        buffer.push(i.clone());
-                    }
-                }
-                matrix.push(buffer.clone());
-
-                let mut text = "{".to_string();
-
-                for i in matrix.iter() {
-                    for j in i.iter() {
-                        text += &format!(" {},", j.clone().display())
-                    }
-                    text.remove(text.len() - 1);
-                    text += ";"
-                }
-
-                text.remove(text.len() - 1);
-                text += "}";
-                text
-            }
+            Type::Object(name, _) => format!("Object<{name}>"),
+            Type::Matrix(mx, (_, length)) => Type::to_matrix(mx, *length),
         }
     }
 
@@ -281,7 +248,7 @@ impl Type {
             Type::List(l) => Fraction::new(l.len() as f64),
             Type::Error(e) => Fraction::new(e.parse().unwrap_or(0f64)),
             Type::Object(_, object) => Fraction::new(object.len() as f64),
-            _ =>  Fraction::new(0f64),
+            _ => Fraction::new(0f64),
         }
     }
 
@@ -311,7 +278,11 @@ impl Type {
             Type::List(l) => l.to_vec(),
             Type::Error(e) => vec![Type::Error(e.to_string())],
             Type::Object(_, object) => object.values().map(|x| x.to_owned()).collect::<Vec<Type>>(),
-            Type::Matrix(l, _) => l.to_owned().iter().map(|x| Type::Number(x.clone())).collect(),
+            Type::Matrix(l, _) => l
+                .to_owned()
+                .iter()
+                .map(|x| Type::Number(x.clone()))
+                .collect(),
         }
     }
 
@@ -581,7 +552,7 @@ impl Executor {
             } else if chars[0] == '#' && chars[chars.len() - 1] == '#' {
                 // Processing comments
                 self.log_print(format!("* Comment \"{}\"\n", token.replace('#', "")));
-            } else if token.contains("/"){
+            } else if token.contains("/") {
                 // Push fraction number from literal
                 self.stack.push(Type::Number(Fraction::from(token)))
             } else {
@@ -743,7 +714,8 @@ impl Executor {
             "encode" => {
                 let string = self.pop_stack().get_string();
                 if let Some(first_char) = string.chars().next() {
-                    self.stack.push(Type::Number(Fraction::new((first_char as u32) as f64)));
+                    self.stack
+                        .push(Type::Number(Fraction::new((first_char as u32) as f64)));
                 } else {
                     self.log_print("Error! failed of string encoding\n".to_string());
                     self.stack.push(Type::Error("string-encoding".to_string()));
@@ -1077,7 +1049,8 @@ impl Executor {
             // Get length of list
             "len" => {
                 let data = self.pop_stack().get_list();
-                self.stack.push(Type::Number(Fraction::new(data.len() as f64)));
+                self.stack
+                    .push(Type::Number(Fraction::new(data.len() as f64)));
             }
 
             // Commands of functional programming
@@ -1265,7 +1238,9 @@ impl Executor {
             }
 
             // Sleep fixed time
-            "sleep" => sleep(Duration::from_secs_f64(self.pop_stack().get_number().to_f64())),
+            "sleep" => sleep(Duration::from_secs_f64(
+                self.pop_stack().get_number().to_f64(),
+            )),
 
             // Commands of object oriented system
 
@@ -1381,7 +1356,11 @@ impl Executor {
 
                 let (matrix, (rows, cols)) = self.pop_stack().get_matrix();
 
-                let matrix = nalgebra::DMatrix::from_row_slice(rows, cols, &matrix.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let matrix = nalgebra::DMatrix::from_row_slice(
+                    rows,
+                    cols,
+                    &matrix.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
                 let result: Vec<f64> = (matrix * number).iter().cloned().collect();
 
                 self.stack.push(Type::Matrix(
@@ -1392,10 +1371,18 @@ impl Executor {
 
             "add-matrix" => {
                 let (matrix1, (rows1, cols1)) = self.pop_stack().get_matrix();
-                let matrix1 = nalgebra::DMatrix::from_row_slice(rows1, cols1, &matrix1.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let matrix1 = nalgebra::DMatrix::from_row_slice(
+                    rows1,
+                    cols1,
+                    &matrix1.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
 
                 let (matrix2, (rows2, cols2)) = self.pop_stack().get_matrix();
-                let matrix2 = nalgebra::DMatrix::from_row_slice(rows2, cols2, &matrix2.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let matrix2 = nalgebra::DMatrix::from_row_slice(
+                    rows2,
+                    cols2,
+                    &matrix2.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
 
                 let result: Vec<f64> = (matrix1 + matrix2).iter().cloned().collect();
 
@@ -1407,10 +1394,18 @@ impl Executor {
 
             "sub-matrix" => {
                 let (matrix1, (rows1, cols1)) = self.pop_stack().get_matrix();
-                let matrix1 = nalgebra::DMatrix::from_row_slice(rows1, cols1, &matrix1.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let matrix1 = nalgebra::DMatrix::from_row_slice(
+                    rows1,
+                    cols1,
+                    &matrix1.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
 
                 let (matrix2, (rows2, cols2)) = self.pop_stack().get_matrix();
-                let matrix2 = nalgebra::DMatrix::from_row_slice(rows2, cols2, &matrix2.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let matrix2 = nalgebra::DMatrix::from_row_slice(
+                    rows2,
+                    cols2,
+                    &matrix2.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
 
                 let result: Vec<f64> = (matrix2 - matrix1).iter().cloned().collect();
 
@@ -1422,10 +1417,18 @@ impl Executor {
 
             "mul-matrix" => {
                 let (matrix1, (rows1, cols1)) = self.pop_stack().get_matrix();
-                let matrix1 = nalgebra::DMatrix::from_row_slice(rows1, cols1, &matrix1.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let matrix1 = nalgebra::DMatrix::from_row_slice(
+                    rows1,
+                    cols1,
+                    &matrix1.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
 
                 let (matrix2, (rows2, cols2)) = self.pop_stack().get_matrix();
-                let matrix2 = nalgebra::DMatrix::from_row_slice(rows2, cols2, &matrix2.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let matrix2 = nalgebra::DMatrix::from_row_slice(
+                    rows2,
+                    cols2,
+                    &matrix2.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
 
                 let result: Vec<f64> = (matrix1 * matrix2).iter().cloned().collect();
 
@@ -1437,7 +1440,11 @@ impl Executor {
 
             "transpose" => {
                 let (matrix, (rows, cols)) = self.pop_stack().get_matrix();
-                let matrix = nalgebra::DMatrix::from_row_slice(rows, cols, &matrix.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let matrix = nalgebra::DMatrix::from_row_slice(
+                    rows,
+                    cols,
+                    &matrix.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
                 let transposed_matrix = matrix.transpose();
 
                 let mut transposed_data = Vec::new();
@@ -1481,8 +1488,14 @@ impl Executor {
                     temp
                 };
 
-                let coefficients = nalgebra::DMatrix::from_row_slice(rows, cols, &matrix.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
-                let constants = nalgebra::DVector::from_row_slice(&constants.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let coefficients = nalgebra::DMatrix::from_row_slice(
+                    rows,
+                    cols,
+                    &matrix.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
+                let constants = nalgebra::DVector::from_row_slice(
+                    &constants.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
 
                 let solution = if let Some(i) = coefficients.lu().solve(&constants) {
                     i
@@ -1506,7 +1519,11 @@ impl Executor {
 
             "graph" => {
                 let (data, (row, col)) = self.pop_stack().get_matrix();
-                let adjacency_matrix = nalgebra::DMatrix::<f64>::from_row_slice(row, col, &data.iter().map(|x|x.to_f64()).collect::<Vec<f64>>());
+                let adjacency_matrix = nalgebra::DMatrix::<f64>::from_row_slice(
+                    row,
+                    col,
+                    &data.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
 
                 let mut graph = Graph::<f64, ()>::new();
                 let mut node_indices = Vec::new();
