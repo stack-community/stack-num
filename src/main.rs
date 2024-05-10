@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use gnuplot::Figure;
 use petgraph::dot::{Config, Dot};
 use petgraph::Graph;
 use rand::seq::SliceRandom;
@@ -174,7 +175,7 @@ impl Type {
     fn to_matrix(mx: &Vec<Fraction>, length: usize) -> String {
         let mut matrix: Vec<Vec<Fraction>> = Vec::new();
         let mut buffer: Vec<Fraction> = Vec::new();
-        
+
         let mut count = 0;
         for i in mx {
             if count < length {
@@ -188,9 +189,9 @@ impl Type {
             }
         }
         matrix.push(buffer.clone());
-        
+
         let mut text = "{".to_string();
-        
+
         for i in matrix.iter() {
             for j in i.iter() {
                 text += &format!(" {},", j.clone().display())
@@ -198,12 +199,12 @@ impl Type {
             text.remove(text.len() - 1);
             text += ";"
         }
-        
+
         text.remove(text.len() - 1);
         text += " }";
         text
     }
-    
+
     /// Show data to display
     fn display(&self) -> String {
         match self {
@@ -215,7 +216,7 @@ impl Type {
                 format!("[{}]", result.join(" "))
             }
             Type::Error(err) => format!("error:{err}"),
-            Type::Object(name, _) => format!("Object<{name}>"),  
+            Type::Object(name, _) => format!("Object<{name}>"),
             Type::Matrix(mx, (_, length)) => Type::to_matrix(mx, *length),
         }
     }
@@ -1541,6 +1542,32 @@ impl Executor {
                 }
                 let dot = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
                 self.stack.push(Type::String(dot))
+            }
+
+            "bar-chart" => {
+                let data: Vec<f64> = self
+                    .pop_stack()
+                    .get_list()
+                    .iter_mut()
+                    .map(|x| x.get_number().to_f64())
+                    .collect();
+                let mut figure = Figure::new();
+                figure.axes2d().boxes(1..=data.len(), data, &[]);
+                figure.set_title("Bar Chart - NumStack");
+                figure.show().unwrap();
+            }
+
+            "line-chart" => {
+                let data: Vec<f64> = self
+                    .pop_stack()
+                    .get_list()
+                    .iter_mut()
+                    .map(|x| x.get_number().to_f64())
+                    .collect();
+                let mut figure = Figure::new();
+                figure.axes2d().lines(1..=data.len(), data, &[]);
+                figure.set_title("Line Chart - NumStack");
+                figure.show().unwrap();
             }
 
             // If it is not recognized as a command, use it as a string.
