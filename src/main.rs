@@ -138,7 +138,7 @@ impl Fraction {
     fn from(value: String) -> Fraction {
         let value = value.split("/").collect::<Vec<&str>>();
         let mut fraction = Fraction {
-            numerator: value.get(0).unwrap_or(&"0").parse::<isize>().unwrap_or(1),
+            numerator: value.get(0).unwrap_or(&"0").parse::<isize>().unwrap_or(0),
             denominator: value.get(1).unwrap_or(&"1").parse::<isize>().unwrap_or(1),
         };
         fraction.simplify();
