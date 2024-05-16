@@ -1577,6 +1577,26 @@ impl Executor {
                 self.stack.push(Type::Matrix(transposed_data, (cols, rows)))
             }
 
+            "inverse" => {
+                let (matrix, (rows, cols)) = self.pop_stack().get_matrix();
+                let matrix = nalgebra::DMatrix::from_row_slice(
+                    rows,
+                    cols,
+                    &matrix.iter().map(|x| x.to_f64()).collect::<Vec<f64>>(),
+                );
+                let inversed_matrix = if let Some(i) = matrix.try_inverse() {
+                    i
+                } else {
+                    self.stack.push(Type::Error("no-inverse".to_string()));
+                    return;
+                };
+
+                self.stack.push(Type::Matrix(
+                    inversed_matrix.iter().map(|x| Fraction::new(*x)).collect(),
+                    (inversed_matrix.nrows(), inversed_matrix.ncols()),
+                ))
+            }
+
             "sim-equation" => {
                 let (matrix, (rows, cols)) = self.pop_stack().get_matrix();
                 let constants: Vec<Fraction> = {
