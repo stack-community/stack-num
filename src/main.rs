@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{self, Error, Read, Write};
+use std::ops::{Add, Div, Mul, Sub};
 use std::path::Path;
 use std::thread::{self, sleep};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -86,24 +87,49 @@ fn input(prompt: &str) -> String {
     result.trim().to_string()
 }
 
+fn convert(number: f64) -> (isize, isize) {
+    const MAX_DENOMINATOR: isize = 1_000_000;
+
+    if number == 0.0 {
+        return (0, 1);
+    }
+
+    let mut best_numerator = 0;
+    let mut best_denominator = 1;
+    let mut best_diff = f64::MAX;
+
+    for denominator in 1..=MAX_DENOMINATOR {
+        let numerator = (number * denominator as f64).round() as isize;
+        let fraction = numerator as f64 / denominator as f64;
+        let diff = (number - fraction).abs();
+
+        if diff < best_diff {
+            best_diff = diff;
+            best_numerator = numerator;
+            best_denominator = denominator;
+
+            if diff == 0.0 {
+                break;
+            }
+        }
+    }
+
+    (best_numerator, best_denominator)
+}
+
 #[derive(Debug, Clone, Copy)]
 struct Fraction {
-    numerator: i32,
-    denominator: i32,
+    numerator: isize,
+    denominator: isize,
 }
 
 impl Fraction {
-    fn new(value: f64) -> Self {
+    fn new(number: f64) -> Self {
+        let result = convert(number);
         let mut frac = Fraction {
-            numerator: value as i32,
-            denominator: 1,
+            numerator: result.0,
+            denominator: result.1,
         };
-
-        let precision = 0.0001;
-        while (frac.to_f64() - value).abs() > precision {
-            frac.denominator *= 10;
-            frac.numerator = (value * frac.denominator as f64) as i32;
-        }
 
         frac.simplify();
         frac
@@ -112,8 +138,8 @@ impl Fraction {
     fn from(value: String) -> Fraction {
         let value = value.split("/").collect::<Vec<&str>>();
         let mut fraction = Fraction {
-            numerator: value.get(0).unwrap_or(&"0").parse::<i32>().unwrap_or(1),
-            denominator: value.get(1).unwrap_or(&"1").parse::<i32>().unwrap_or(1),
+            numerator: value.get(0).unwrap_or(&"0").parse::<isize>().unwrap_or(1),
+            denominator: value.get(1).unwrap_or(&"1").parse::<isize>().unwrap_or(1),
         };
         fraction.simplify();
         fraction
@@ -131,7 +157,7 @@ impl Fraction {
     // Function to simplify the fraction
     fn simplify(&mut self) {
         // Function to find the greatest common divisor (GCD) using Euclid's algorithm
-        fn gcd(mut a: i32, mut b: i32) -> i32 {
+        fn gcd(mut a: isize, mut b: isize) -> isize {
             while b != 0 {
                 let temp = b;
                 b = a % b;
@@ -147,7 +173,94 @@ impl Fraction {
 
     // Function to convert the fraction to a floating-point number
     fn to_f64(&self) -> f64 {
-        self.numerator as f64 / self.denominator as f64
+        (self.numerator / self.denominator) as f64
+    }
+}
+
+impl Add for Fraction {
+    type Output = Fraction;
+
+    fn add(self, other: Fraction) -> Fraction {
+        let number = other;
+        fn lcm(a: isize, b: isize) -> isize {
+            let gcd = |mut a: isize, mut b: isize| {
+                while b != 0 {
+                    let temp = b;
+                    b = a % b;
+                    a = temp;
+                }
+                a
+            };
+
+            (a * b) / gcd(a, b)
+        }
+
+        let denominator = lcm(self.denominator, number.denominator);
+        let numerator1 = self.numerator * (denominator / number.denominator);
+        let numerator2 = number.numerator * (denominator / self.denominator);
+        let mut result = Fraction {
+            numerator: numerator1 + numerator2,
+            denominator,
+        };
+        result.simplify();
+        result
+    }
+}
+
+impl Sub for Fraction {
+    type Output = Fraction;
+
+    fn sub(self, other: Fraction) -> Fraction {
+        let number = other;
+        fn lcm(a: isize, b: isize) -> isize {
+            let gcd = |mut a: isize, mut b: isize| {
+                while b != 0 {
+                    let temp = b;
+                    b = a % b;
+                    a = temp;
+                }
+                a
+            };
+
+            (a * b) / gcd(a, b)
+        }
+
+        let denominator = lcm(self.denominator, number.denominator);
+        let numerator1 = self.numerator * (denominator / number.denominator);
+        let numerator2 = number.numerator * (denominator / self.denominator);
+        let mut result = Fraction {
+            numerator: numerator1 - numerator2,
+            denominator,
+        };
+        result.simplify();
+        result
+    }
+}
+
+impl Mul for Fraction {
+    type Output = Fraction;
+
+    fn mul(self, other: Fraction) -> Fraction {
+        let number = other;
+        let mut result = Fraction {
+            numerator: self.numerator * number.numerator,
+            denominator: self.denominator * number.denominator,
+        };
+        result.simplify();
+        result
+    }
+}
+
+impl Div for Fraction {
+    type Output = Fraction;
+
+    fn div(self, other: Fraction) -> Fraction {
+        let mut number = other;
+        (number.denominator, number.numerator) = (number.numerator, number.denominator);
+
+        let mut result = self * number;
+        result.simplify();
+        result
     }
 }
 
@@ -574,30 +687,30 @@ impl Executor {
 
             // Addition
             "add" => {
-                let b = self.pop_stack().get_number().to_f64();
-                let a = self.pop_stack().get_number().to_f64();
-                self.stack.push(Type::Number(Fraction::new(a + b)));
+                let b = self.pop_stack().get_number();
+                let a = self.pop_stack().get_number();
+                self.stack.push(Type::Number(a + b));
             }
 
             // Subtraction
             "sub" => {
-                let b = self.pop_stack().get_number().to_f64();
-                let a = self.pop_stack().get_number().to_f64();
-                self.stack.push(Type::Number(Fraction::new(a - b)));
+                let b = self.pop_stack().get_number();
+                let a = self.pop_stack().get_number();
+                self.stack.push(Type::Number(a - b));
             }
 
             // Multiplication
             "mul" => {
-                let b = self.pop_stack().get_number().to_f64();
-                let a = self.pop_stack().get_number().to_f64();
-                self.stack.push(Type::Number(Fraction::new(a * b)));
+                let b = self.pop_stack().get_number();
+                let a = self.pop_stack().get_number();
+                self.stack.push(Type::Number(a * b));
             }
 
             // Division
             "div" => {
-                let b = self.pop_stack().get_number().to_f64();
-                let a = self.pop_stack().get_number().to_f64();
-                self.stack.push(Type::Number(Fraction::new(a / b)));
+                let b = self.pop_stack().get_number();
+                let a = self.pop_stack().get_number();
+                self.stack.push(Type::Number(a / b));
             }
 
             // Remainder of division
@@ -636,6 +749,12 @@ impl Executor {
             "tan" => {
                 let number = self.pop_stack().get_number().to_f64();
                 self.stack.push(Type::Number(Fraction::new(number.tan())))
+            }
+
+            // Exponential function
+            "exp" => {
+                let number = self.pop_stack().get_number().to_f64();
+                self.stack.push(Type::Number(Fraction::new(number.exp())))
             }
 
             // Logical operations of AND
