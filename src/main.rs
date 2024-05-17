@@ -196,8 +196,9 @@ impl Add for Fraction {
         }
 
         let denominator = lcm(self.denominator, number.denominator);
-        let numerator1 = self.numerator * (denominator / number.denominator);
-        let numerator2 = number.numerator * (denominator / self.denominator);
+        let numerator1 = self.numerator * (denominator / self.denominator);
+        let numerator2 = other.numerator * (denominator / other.denominator);
+
         let mut result = Fraction {
             numerator: numerator1 + numerator2,
             denominator,
@@ -226,8 +227,9 @@ impl Sub for Fraction {
         }
 
         let denominator = lcm(self.denominator, number.denominator);
-        let numerator1 = self.numerator * (denominator / number.denominator);
-        let numerator2 = number.numerator * (denominator / self.denominator);
+        let numerator1 = self.numerator * (denominator / self.denominator);
+        let numerator2 = other.numerator * (denominator / other.denominator);
+
         let mut result = Fraction {
             numerator: numerator1 - numerator2,
             denominator,
