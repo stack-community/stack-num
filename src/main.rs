@@ -1156,9 +1156,9 @@ impl Executor {
                 let mut range: Vec<Type> = Vec::new();
                 let mut i = min;
 
-                while i < max {
+                while i.to_f64() < max.to_f64() {
                     range.push(Type::Number(i));
-                    i += step;
+                    i = step + i;
                 }
 
                 self.stack.push(Type::List(range));
